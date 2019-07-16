@@ -1,0 +1,16 @@
+{
+  "name": "get-github-users.git",
+  "version": "1.0.0",
+  "description": "",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+  },
+  "keywords": [],
+  "author": "",
+  "license": "unlicensed",
+  "dependencies": {
+    "axios": "^0.19.0",
+    "mongodb": "^3.2.7"
+  }
+}
