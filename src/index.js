@@ -1,4 +1,10 @@
 const axios = require('axios');
+const {
+  initConnection,
+  insertDocuments,
+} = require('./db');
+
+const DB_COLLECTION = 'Users';
 
 const host = 'https://api.github.com';
 const paths = {
@@ -13,7 +19,7 @@ for (const [key, value] of Object.entries(paths)) {
 const USERS_IN_REQUEST = 100;
 
 // TODO: This demo does not count saved to the database users on the first run.
-let since = 0;
+let total = 0;
 
 let limit = {
   remaining: 0,
@@ -22,25 +28,6 @@ let limit = {
 
 let sleepMs = 0;
 let timeoutId = '';
-
-// Setup MongoDB
-const MongoClient = require('mongodb').MongoClient;
-const mongoUrl = 'mongodb://x:BUm7sbLVUJAfcHYFs@ds054479.mlab.com:54479/github-users-test';
-
-/**
- * Insert data to DB
- * @param data
- * @returns {Promise<void>}
- */
-const insertDocuments = async (data) => {
-  await MongoClient.connect(mongoUrl, {useNewUrlParser: true}, function (err, connection) {
-    const collection = connection.db().collection('Users');
-    collection.insertMany(data, function (err, result) {
-      console.log('insertDocuments - Inserted');
-      connection.close();
-    });
-  });
-};
 
 /**
  * Get limit
@@ -83,18 +70,13 @@ const getSearchResult = async () => {
   try {
     const response = await axios.get(API.SEARCH, {
       params: {
-        since,
+        since: total,
         per_page: USERS_IN_REQUEST,
       },
     });
     const items = response.data;
 
     if (Array.isArray(items) && items.length > 0) {
-      // Add one page.
-      // In this release we do not cover situations,
-      // when API sends less than `USERS_IN_REQUEST` users in array.
-      since += items.length;
-      console.log('getSearchResult - since:', since);
       return items;
     } else {
       return [];
@@ -115,8 +97,9 @@ const repeatSearch = async () => {
 
   for (const i of Array.from({length: limit.remaining})) {
     const addedUsers = await getSearchResult();
-    insertDocuments(addedUsers);
-    console.log('repeatSearch - since:', since);
+    const insertedCount = await insertDocuments(DB_COLLECTION, addedUsers);
+    total += insertedCount;
+    console.log('repeatSearch - insertedCount, total:', insertedCount, total);
   }
 };
 
@@ -142,9 +125,19 @@ const runJob = async () => {
   // Send requests.
   await repeatSearch();
 
-  // Repeat
+  // Repeat.
   await runJob();
 };
 
-// Process incoming GET request.
-runJob();
+// Start.
+(async () => {
+  const connected = await initConnection();
+
+  if (!connected) {
+    throw Error('Not connected to MongoDB');
+  }
+
+  await runJob();
+})().catch(error => {
+  console.log('Start - error:', error);
+});
